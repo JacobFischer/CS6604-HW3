@@ -1,3 +1,5 @@
+var print = console.log;
+
 $(document).ready(function() {
     var numDatas = getUrlParameter("datas", 5);
 
@@ -7,8 +9,9 @@ $(document).ready(function() {
     for(var i = 0; i < numDatas; i++) {
         var d = {
             id: String.fromCharCode("A".charCodeAt(0) + i),
-            P: Math.random(),
-            X: undefined,
+            P: Math.random(),   // Probability of Access
+            X: 0,               // Frequency of Broadcast
+            PIX: NaN,
         };
 
         randomSum += d.P;
@@ -16,16 +19,30 @@ $(document).ready(function() {
         datas.push(d);
     }
 
+    function updateDatas() {
+        for(var i = 0; i < datas.length; i++) {
+            var d = datas[i];
+            var $d = $("#data-" + d.id);
+            for(var key in d) {
+                $("." + key, $d).html(d[key]);
+            }
+        }
+    };
+
     for(var i = 0; i < numDatas; i++) {
         var b = datas[i];
         b.P = b.P / randomSum;
-        $accessPriorities.append($("<li>")
-            .attr("id", b.id)
-            .html(b.id + ": P(" + b.id + ") = " + b.P + ", X(" + b.id + ") = " + b.X + ", PIX(" + b.id + ") = " + (b.P / b.X))
-        );
+        var $row = $("<tr>")
+            .attr("id", "data-" + b.id)
+            .append($("<td>").addClass("id"))
+            .append($("<td>").addClass("P"))
+            .append($("<td>").addClass("X"))
+            .append($("<td>").addClass("PIX"));
+
+        $accessPriorities.append($row);
     }
 
-    var clientLength = getUrlParameter("length", 5);
+    updateDatas();
 
     var $broadcastDisk = $("#broadcast-disk");
     var $clientRequests = $("#client-requests");
@@ -65,14 +82,15 @@ $(document).ready(function() {
     }
 
     var clientRequests = [];
+    clientRequests.length = getUrlParameter("clients", 5);
 
-    for(var i = 0; i < clientLength; i++) {
+    for(var i = 0; i < clientRequests.length; i++) {
         var c = {
             data: datas.randomElement(),
             fullfilled: false,
         };
 
-        clientRequests.push(c);
+        clientRequests[i] = c;
 
         c.$element = $("<td>")
             .attr("id", "client-request-" + i)
@@ -80,7 +98,54 @@ $(document).ready(function() {
             .appendTo($clientRequests);
     }
 
-    var cached = undefined;
+    var cached = [];
+    cached.length = getUrlParameter("cache", 1);
+
+    var $cached = $("#cached");
+    for(var i = 0; i < cached.length; i++) {
+        $cached.append($("<td>")
+            .attr("id", "cached-" + i)
+        );
+    }
+
+    var broadcasts = 0;
+    function broadcast(data) {
+        broadcasts++;
+
+        data.X++;
+        data.PIX = data.P / data.X;
+
+        var last = cached.last();
+        if(!last || last.PIX < data.PIX) {
+            cached.pop();
+            cached.push(data);
+
+            cached.sort(function(a, b) {
+                if(!b && !a) {
+                    return 0;
+                }
+
+                if(!b) {
+                    return -1;
+                }
+
+                if(!a) {
+                    return 1;
+                }
+
+                return b.PIX - a.PIX;
+            });
+        }
+
+        for(var i = 0; i < cached.length; i++) {
+            var c = cached[i];
+            $("#cached-" + i).html(c ? c.id : "-");
+        }
+
+        updateDatas();
+    }
+
+
     var currentIndex = -1;
     var clientIndex = 0;
     var clientRequest = clientRequests[0];
@@ -93,7 +158,9 @@ $(document).ready(function() {
 
         var broadcasting = broadcastDisk[currentIndex];
 
-        while(clientRequest && (clientRequest.data === broadcasting || clientRequest.data === cached)) {
+        broadcast(broadcasting);
+
+        while(clientRequest && (clientRequest.data === broadcasting ||  cached.indexOf(clientRequest.data) > -1)) {
             clientRequest.fullfilled = true;
             clientRequest = clientRequests[++clientIndex];
         }
