@@ -1,8 +1,131 @@
 var print = console.log;
 
-$(document).ready(function() {
-    var numDatas = getUrlParameter("datas", 5);
+function chunkify(a, n, out, balanced) {
+    if (n < 2) {
+        out.push(a);
+        return out;
+    }
 
+    var len = a.length,
+        i = 0,
+        size;
+
+    if (len % n === 0) {
+        size = Math.floor(len / n);
+        while (i < len) {
+            out.push(a.slice(i, i += size));
+        }
+    }
+    else if (balanced) {
+        while (i < len) {
+            size = Math.ceil((len - i) / n--);
+            out.push(a.slice(i, i += size));
+        }
+    }
+
+    else {
+
+        n--;
+        size = Math.floor(len / n);
+        if (len % size === 0)
+            size--;
+        while (i < size * n) {
+            out.push(a.slice(i, i += size));
+        }
+        out.push(a.slice(size * n))
+
+    }
+
+    return out;
+}
+
+$(document).ready(function() {
+    // Broadcast Program Generation
+
+    // 1. Order the pages from hottest to coldest, we will call this the "main disk"
+    var masterDisk = [];
+    masterDisk.length = getUrlParameter("disk", 12);
+
+    for(var i = 0; i < masterDisk.length; i++) {
+        masterDisk[i] = asLetter(i);/*{ // a new "page" item
+            id: asLetter(i),
+        };*/
+    }
+
+    var disks = [];
+    disks.length = getUrlParameter("disks", 3);
+
+    var maxChunks = 0;
+    var maxLoop = 0;
+    while(maxLoop++ < 100) {
+        for(var i = 0; i < disks.length; i++) {
+            disks[i] = [];
+            disks[i].index = i;
+        }
+
+        // now assign each item in disk to an element in disks
+        for(var i = 0; i < masterDisk.length; i++) {
+            var page = masterDisk[i];
+            var disk = disks.randomElement();
+            page.disk = disk;
+
+            // TODO: disk freq
+            disk.push(page);
+        }
+
+        // now calculate relative freqs as a divisor of their lengths
+        var freqs = [];
+        for(var i = 0; i < disks.length; i++) {
+            var disk = disks[i];
+            disk.relativeFrequency = randomInt(1, 5);//divisors(disk.length).randomElement();
+            freqs.push(disk.relativeFrequency);
+        }
+
+        var invalid = false;
+        maxChunks = LCM(freqs);
+        for(var i = 0; i < disks.length; i++) {
+            var disk = disks[i];
+            disk.chunks = [];
+            disk.numberChunks = maxChunks / disk.relativeFrequency;
+
+            if(disk.numberChunks > disk.length) { // slides don't say how to handle more chunks than items... all examples are less than
+                invalid = true;
+                break;
+            }
+        }
+
+        if(!invalid) {
+            break;
+        }
+
+    }
+
+    // create the chunks
+    for(var i = 0; i < disks.length; i++) {
+        var disk = disks[i];
+
+        chunkify(disk, disk.numberChunks, disk.chunks, true);
+
+        console.log("DISK", disk);
+    }
+
+    // create the broadcast disk
+    console.log("maxChunks", maxChunks)
+    for(var i = 0; i < maxChunks; i++) {
+        for(var j = 0; j < disks.length; j++) {
+            var disk = disks[j];
+            var k = i % disk.numberChunks;
+            console.log("broadcasting...", i, j, k);
+            console.log(disk.chunks[k]);
+        }
+    }
+
+    // TODO: instead of broadcasting the disk to console.log, put it in broadcastDisk and update PIX code to use it
+
+    // PIX --- //
+    // TODO: use broadcast disk generated above...
+
+    var numDatas = getUrlParameter("datas", 5);
     var $accessPriorities = $("#access-priorities");
     var datas = [];
     var randomSum = 0;
@@ -99,7 +222,7 @@ $(document).ready(function() {
     }
 
     var cached = [];
-    cached.length = getUrlParameter("cache", 1);
+    cached.length = getUrlParameter("caches", 1);
 
     var $cached = $("#cached");
     for(var i = 0; i < cached.length; i++) {
@@ -116,7 +239,7 @@ $(document).ready(function() {
         data.PIX = data.P / data.X;
 
         var last = cached.last();
-        if(!last || last.PIX < data.PIX) {
+        if(!last || (last.PIX < data.PIX && cached.indexOf(data) < 0)) {
             cached.pop();
             cached.push(data);
 
