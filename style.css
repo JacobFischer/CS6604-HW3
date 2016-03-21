@@ -15,3 +15,31 @@ table td {
 #client-requests .fullfilled {
 	background: gray;
 }
+
+.chunky table {
+	display: inline;
+}
+
+.DISK_0 {
+	background-color: LightSalmon;
+}
+
+.DISK_1 {
+	background-color: LightGreen;
+}
+
+.DISK_2 {
+	background-color: LightBlue;
+}
+
+.DISK_3 {
+	background-color: Violet;
+}
+
+.DISK_4 {
+	background-color: LightYellow;
+}
+
+.DISK_5 {
+	background-color: LightCyan;
+}

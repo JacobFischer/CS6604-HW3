@@ -2,7 +2,7 @@ var print = console.log;
 
 function chunkify(a, n, out, balanced) {
     if (n < 2) {
-        out.push(a);
+        out.push(a.slice());
         return out;
     }
 
@@ -43,29 +43,62 @@ $(document).ready(function() {
     // Broadcast Program Generation
 
     // 1. Order the pages from hottest to coldest, we will call this the "main disk"
-    var masterDisk = [];
-    masterDisk.length = getUrlParameter("disk", 12);
+    var pages = [];
+    pages.length = getUrlParameter("pages", 6);
 
-    for(var i = 0; i < masterDisk.length; i++) {
-        masterDisk[i] = asLetter(i);/*{ // a new "page" item
+    var randomSum = 0;
+    for(var i = 0; i < pages.length; i++) {
+        pages[i] = {
             id: asLetter(i),
-        };*/
+            P: Math.random(),   // Probability of Access
+            X: 0,               // Frequency of Broadcast
+            PIX: NaN,
+        };
+
+        randomSum += pages[i].P;
     }
 
+    var $pages = $("#pages");
+    function updatePages() {
+        for(var i = 0; i < pages.length; i++) {
+            var d = pages[i];
+            var $d = $("#data-" + d.id);
+            for(var key in d) {
+                $("." + key, $d).html(d[key]);
+            }
+        }
+    };
+
+    for(var i = 0; i < pages.length; i++) {
+        var page = pages[i];
+        page.P = page.P / randomSum;
+        var $row = $("<tr>")
+            .attr("id", "data-" + page.id)
+            .append($("<td>").addClass("id"))
+            .append($("<td>").addClass("P"))
+            .append($("<td>").addClass("X"))
+            .append($("<td>").addClass("PIX"));
+
+        $pages.append($row);
+    }
+
+    updatePages();
+
     var disks = [];
-    disks.length = getUrlParameter("disks", 3);
+    disks.length = getUrlParameter("disks", 2);
 
     var maxChunks = 0;
     var maxLoop = 0;
     while(maxLoop++ < 100) {
         for(var i = 0; i < disks.length; i++) {
-            disks[i] = [];
-            disks[i].index = i;
+            var disk = [];
+            disk.id = "DISK_" + i;
+            disks[i] = disk;
         }
 
         // now assign each item in disk to an element in disks
-        for(var i = 0; i < masterDisk.length; i++) {
-            var page = masterDisk[i];
+        for(var i = 0; i < pages.length; i++) {
+            var page = pages[i];
             var disk = disks.randomElement();
             page.disk = disk;
 
@@ -85,7 +118,6 @@ $(document).ready(function() {
         maxChunks = LCM(freqs);
         for(var i = 0; i < disks.length; i++) {
             var disk = disks[i];
-            disk.chunks = [];
             disk.numberChunks = maxChunks / disk.relativeFrequency;
 
             if(disk.numberChunks > disk.length) { // slides don't say how to handle more chunks than items... all examples are less than
@@ -97,26 +129,100 @@ $(document).ready(function() {
         if(!invalid) {
             break;
         }
-
     }
 
+    var $disks = $("#disks");
     // create the chunks
     for(var i = 0; i < disks.length; i++) {
         var disk = disks[i];
 
-        chunkify(disk, disk.numberChunks, disk.chunks, true);
+        disk.chunks = chunkify(disk, disk.numberChunks, [], true);
 
-        console.log("DISK", disk);
+        var $chunky = $("<div>")
+            .addClass("chunky")
+            .attr("id", "chunky-disk-" + i);
+        for(var j = 0; j < disk.chunks.length; j++) {
+            var chunk = disk.chunks[j];
+            chunk.id = j;
+            var $chunk = $("<td>").appendTo(
+                $("<tr>").appendTo(
+                    $("<table>").appendTo(
+                        $chunky
+                    )
+                )
+            );
+
+            for(var k = 0; k < chunk.length; k++) {
+                var page = chunk[k];
+                page.chunk = chunk;
+
+                $chunk.append($("<td>")
+                    .html(page.id)
+                );
+            }
+        }
+
+        var $tr = $("<tr>").attr("id", "disk-" + i);
+
+        for(var j = 0; j < disk.length; j++) {
+            var page = disk[j];
+            $tr.append($("<td>")
+                .addClass(page.id)
+                .addClass(page.chunk.id)
+                .html(page.id));
+        }
+
+        $disks.append(
+            $("<li>").append(
+                $('<table class="disk">').append(
+                    $tr
+                )
+            ).append(
+               $chunky
+            )
+        );
     }
 
     // create the broadcast disk
-    console.log("maxChunks", maxChunks)
+    var chunkyBroadcastDisk = [];
     for(var i = 0; i < maxChunks; i++) {
         for(var j = 0; j < disks.length; j++) {
             var disk = disks[j];
             var k = i % disk.numberChunks;
-            console.log("broadcasting...", i, j, k);
-            console.log(disk.chunks[k]);
+            var chunk = disk.chunks[k];
+            chunkyBroadcastDisk.push(chunk);
+
+            for(var c = 0; c < chunk.length; c++) {
+                chunk[c]._ready = true;
+            }
+        }
+
+        var ready = true;
+        for(var p = 0; p < pages.length; p++) {
+            if(!pages[p]._ready) {
+                ready = false;
+                break;
+            }
+        }
+
+        if(ready) {
+            break
+        }
+    }
+
+    var $broadcastDisk = $("#broadcast-disk");
+    var broadcastDisk = []; // the actual, useful broadcast disk with chunks "flattened"
+    for(var i = 0; i < chunkyBroadcastDisk.length; i++) {
+        var chunk = chunkyBroadcastDisk[i];
+        for(var j = 0; j < chunk.length; j++) {
+            var page = chunk[j];
+            broadcastDisk.push(page);
+
+            $broadcastDisk.append($("<td>")
+                .attr("id", "broadcast-" + page.id)
+                .addClass(page.disk.id)
+                .html(page.id)
+            );
         }
     }
 
@@ -125,91 +231,14 @@ $(document).ready(function() {
     // PIX --- //
     // TODO: use broadcast disk generated above...
 
-    var numDatas = getUrlParameter("datas", 5);
-    var $accessPriorities = $("#access-priorities");
-    var datas = [];
-    var randomSum = 0;
-    for(var i = 0; i < numDatas; i++) {
-        var d = {
-            id: String.fromCharCode("A".charCodeAt(0) + i),
-            P: Math.random(),   // Probability of Access
-            X: 0,               // Frequency of Broadcast
-            PIX: NaN,
-        };
-
-        randomSum += d.P;
-
-        datas.push(d);
-    }
-
-    function updateDatas() {
-        for(var i = 0; i < datas.length; i++) {
-            var d = datas[i];
-            var $d = $("#data-" + d.id);
-            for(var key in d) {
-                $("." + key, $d).html(d[key]);
-            }
-        }
-    };
-
-    for(var i = 0; i < numDatas; i++) {
-        var b = datas[i];
-        b.P = b.P / randomSum;
-        var $row = $("<tr>")
-            .attr("id", "data-" + b.id)
-            .append($("<td>").addClass("id"))
-            .append($("<td>").addClass("P"))
-            .append($("<td>").addClass("X"))
-            .append($("<td>").addClass("PIX"));
-
-        $accessPriorities.append($row);
-    }
-
-    updateDatas();
-
-    var $broadcastDisk = $("#broadcast-disk");
     var $clientRequests = $("#client-requests");
-
-    var broadcastDisk = [];
-
-    var maxLoop = 0;
-    while(++maxLoop < 100) { // will break out once broadcastDisk has all datas in it
-        var b = datas.randomElement();
-        broadcastDisk.push(b);
-
-        $broadcastDisk.append($("<td>")
-            .attr("id", "broadcast-" + b.id)
-            .html(b.id)
-        );
-
-        var broadcasting = {};
-        for(var i = 0; i < broadcastDisk.length; i++) {
-            broadcasting[broadcastDisk[i].id] = true;
-        }
-
-        var cont = false;
-        for(var i = 0; i < datas.length; i++) {
-            if(!broadcasting[datas[i].id]) {
-                cont = true;
-                break;
-            }
-        }
-
-        if(!cont) {
-            break;
-        }
-    }
-
-    if(maxLoop >= 100) {
-        return alert("MAX LOOP!");
-    }
 
     var clientRequests = [];
     clientRequests.length = getUrlParameter("clients", 5);
 
     for(var i = 0; i < clientRequests.length; i++) {
         var c = {
-            data: datas.randomElement(),
+            page: pages.randomElement(),
             fullfilled: false,
         };
 
@@ -217,7 +246,7 @@ $(document).ready(function() {
 
         c.$element = $("<td>")
             .attr("id", "client-request-" + i)
-            .html(c.data.id)
+            .html(c.page.id)
             .appendTo($clientRequests);
     }
 
@@ -232,16 +261,16 @@ $(document).ready(function() {
     }
 
     var broadcasts = 0;
-    function broadcast(data) {
+    function broadcast(page) {
         broadcasts++;
 
-        data.X++;
-        data.PIX = data.P / data.X;
+        page.X++;
+        page.PIX = page.P / page.X;
 
         var last = cached.last();
-        if(!last || (last.PIX < data.PIX && cached.indexOf(data) < 0)) {
+        if(!last || (last.PIX < page.PIX && cached.indexOf(page) < 0)) {
             cached.pop();
-            cached.push(data);
+            cached.push(page);
 
             cached.sort(function(a, b) {
                 if(!b && !a) {
@@ -265,7 +294,7 @@ $(document).ready(function() {
             $("#cached-" + i).html(c ? c.id : "-");
         }
 
-        updateDatas();
+        updatePages();
     }
 
 
@@ -283,7 +312,7 @@ $(document).ready(function() {
 
         broadcast(broadcasting);
 
-        while(clientRequest && (clientRequest.data === broadcasting ||  cached.indexOf(clientRequest.data) > -1)) {
+        while(clientRequest && (clientRequest.page === broadcasting ||  cached.indexOf(clientRequest.page) > -1)) {
             clientRequest.fullfilled = true;
             clientRequest = clientRequests[++clientIndex];
         }
