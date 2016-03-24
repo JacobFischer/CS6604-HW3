@@ -1,5 +1,8 @@
 var print = console.log;
 
+var USE_LIX = Boolean(getUrlParameter("lix"));
+var USE_PIX = !USE_LIX; // if they don't tell us to use LIX, we will default to PIX
+
 function chunkify(a, n, out, balanced) {
     if (n < 2) {
         out.push(a.slice());
@@ -42,7 +45,7 @@ function chunkify(a, n, out, balanced) {
 $(document).ready(function() {
     // Broadcast Program Generation
 
-    // 1. Order the pages from hottest to coldest, we will call this the "main disk"
+    // Order the pages from hottest to coldest, we will call this the "main disk"
     var pages = [];
     pages.length = getUrlParameter("pages", 6);
 
@@ -132,6 +135,7 @@ $(document).ready(function() {
     }
 
     var $disks = $("#disks");
+
     // create the chunks
     for(var i = 0; i < disks.length; i++) {
         var disk = disks[i];
@@ -226,10 +230,7 @@ $(document).ready(function() {
         }
     }
 
-    // TODO: instead of broadcasting the disk to console.log, put it in broadcastDisk and update PIX code to use it
-
-    // PIX --- //
-    // TODO: use broadcast disk generated above...
+    // PIX/LIX //
 
     var $clientRequests = $("#client-requests");
 
@@ -261,6 +262,8 @@ $(document).ready(function() {
     }
 
     var broadcasts = 0;
+
+    // during this we broadcast something, and may cache it, then move to the next item in the broadcast dist, this will depend on PIX vs LIX setting
     function broadcast(page) {
         broadcasts++;
 
@@ -302,6 +305,7 @@ $(document).ready(function() {
     var clientIndex = 0;
     var clientRequest = clientRequests[0];
 
+    // called when the click next, mostly handles the html emements
     function next() {
         currentIndex++;
         if(currentIndex >= broadcastDisk.length) {
