@@ -3,6 +3,7 @@ var print = console.log;
 var USE_LIX = Boolean(getUrlParameter("lix"));
 var USE_PIX = !USE_LIX; // if they don't tell us to use LIX, we will default to PIX
 var UPDATE_PIX = Boolean(getUrlParameter("updatePIX"));
+var UNIFORM = getUrlParameter("uniform");
 
 function chunkify(a, n, out, balanced) {
     if (n < 2) {
@@ -45,13 +46,21 @@ function chunkify(a, n, out, balanced) {
 
 $(document).ready(function() {
     var CACHE_STRATEGY = USE_LIX ? "LIX" : "PIX";
-    $(".cache-strategy").html(CACHE_STRATEGY);
+    var $cacheStrategy = $(".cache-strategy").html(CACHE_STRATEGY);
+
+    var CONST_C = 0.5;
+    if(USE_PIX) {
+        $("#c").hide();
+    }
+    else {
+        $("#c-value").html(CONST_C);
+    }
 
     // Broadcast Program Generation
 
     // Order the pages from hottest to coldest, we will call this the "main disk"
     var pages = [];
-    pages.length = getUrlParameter("pages", 6);
+    pages.length = getUrlParameter("pages", USE_LIX ? 10 : 6);
 
     var randomSum = 0;
     for(var i = 0; i < pages.length; i++) {
@@ -60,19 +69,45 @@ $(document).ready(function() {
             P: Math.random(),   // Probability of Access
             X: 0,               // Frequency of Broadcast
             PIX: NaN,
-            LIX: NaN,
+
+            t: 0,               // last time indexed, start at 0 according to slides
+            p: 0,               // last calculated p
+            LIX: 0,
         };
 
         randomSum += pages[i].P;
     }
 
     var $pages = $("#pages");
+
+    if(USE_PIX) {
+        $cacheStrategy
+            .before(
+                $("<th>P</th>")
+            )
+            .before(
+                $("<th>X</th>")
+            );
+    }
+    else {
+        $cacheStrategy
+            .before(
+                $("<th>t</th>")
+            )
+            .before(
+                $("<th>p</th>")
+            );
+    }
+
+    var $pageHeaders = $("th", $pages);
+
     function updatePages() {
         for(var i = 0; i < pages.length; i++) {
-            var d = pages[i];
-            var $d = $("#data-" + d.id);
-            for(var key in d) {
-                $("." + key, $d).html(d[key]);
+            var page = pages[i];
+            for(var key in page) {
+                if(!key.startsWith("$")) {
+                    $("." + key, page.$row).html(page[key]);
+                }
             }
         }
     };
@@ -81,11 +116,14 @@ $(document).ready(function() {
         var page = pages[i];
         page.P = page.P / randomSum;
         var $row = $("<tr>")
-            .attr("id", "data-" + page.id)
-            .append($("<td>").addClass("id"))
-            .append($("<td>").addClass("P"))
-            .append($("<td>").addClass("X"))
-            .append($("<td>").addClass(CACHE_STRATEGY));
+            .attr("id", "page-" + page.id);
+
+        page.$row = $row;
+
+        for(var j = 0; j < $pageHeaders.length; j++) {
+            var $th = $($pageHeaders[j]);
+            $row.append($("<td>").addClass($th.html()));
+        }
 
         $pages.append($row);
     }
@@ -97,7 +135,7 @@ $(document).ready(function() {
 
     var maxChunks = 0;
     var maxLoop = 0;
-    while(maxLoop++ < 100) {
+    while(maxLoop++ < 200) {
         for(var i = 0; i < disks.length; i++) {
             var disk = [];
             disk.id = "DISK_" + i;
@@ -124,6 +162,7 @@ $(document).ready(function() {
 
         var invalid = false;
         maxChunks = LCM(freqs);
+        var allOneChunks = true;
         for(var i = 0; i < disks.length; i++) {
             var disk = disks[i];
             disk.numberChunks = maxChunks / disk.relativeFrequency;
@@ -132,6 +171,19 @@ $(document).ready(function() {
                 invalid = true;
                 break;
             }
+
+            if(UNIFORM) {
+                if(disk.length % disk.numberChunks !== 0) {
+                    invalid = true;
+                    break;
+                }
+
+                allOneChunks = allOneChunks && disk.numberChunks === 1;
+            }
+        }
+
+        if(UNIFORM && allOneChunks) {
+            invalid = true;
         }
 
         if(!invalid) {
@@ -181,20 +233,26 @@ $(document).ready(function() {
                 .html(page.id));
         }
 
-        $disks.append(
-            $("<li>")
-                .append($("<header>")
-                    .addClass(disk.id)
-                    .html("Disk " + i)
+        var $li = $("<li>")
+            .append($("<header>")
+                .addClass(disk.id)
+                .html("Disk " + i)
+            )
+            .append('<div class="disk-p">')
+            .append(
+                $('<table class="disk">').append(
+                    $tr
                 )
-                .append(
-                    $('<table class="disk">').append(
-                        $tr
-                    )
-                ).append(
-                   $chunky
-                )
-        );
+            ).append(
+               $chunky
+            );
+
+        if(USE_LIX) {
+            disk.f = disk.numberChunks;
+            $(".disk-p", $li).html("f = " + disk.f);
+        }
+
+        $disks.append($li);
     }
 
     // create the broadcast disk
@@ -220,7 +278,7 @@ $(document).ready(function() {
         }
 
         if(ready) {
-            break
+            break;
         }
     }
 
@@ -250,6 +308,12 @@ $(document).ready(function() {
         updatePages();
     }
 
+    // update all pages color coded
+    for(var i = 0; i < pages.length; i++) {
+        var page = pages[i];
+        page.$row.addClass(page.disk.id);
+    }
+
     // PIX/LIX //
 
     var $clientRequests = $("#client-requests");
@@ -275,16 +339,17 @@ $(document).ready(function() {
 
     var diskCaches = [];
     var diskCachesNum = USE_PIX ? 1 : disks.length;
+    var maxCacheLength = getUrlParameter("caches", USE_LIX ? 3 : 1);
     var currentCache = undefined; // will be a cache in diskCaches
     for(var i = 0; i < diskCachesNum; i++) {
         var cache = [];
-        cache.length = getUrlParameter("caches", 1);
+        cache.length = maxCacheLength;
         var index = 0;
         if(USE_LIX) {
             index = disks[i].id;
         }
 
-        diskCaches[i] = cache;
+        diskCaches[index] = cache;
         currentCache = currentCache || cache;
 
         cache.$tr = $("<tr>")
@@ -302,12 +367,28 @@ $(document).ready(function() {
         }
     }
 
-    var broadcasts = 0;
+    function sortCurrentCache() {
+        currentCache.sort(function(a, b) {
+            if(!b && !a) {
+                return 0;
+            }
+
+            if(!b) {
+                return -1;
+            }
+
+            if(!a) {
+                return 1;
+            }
+
+            return b[CACHE_STRATEGY] - a[CACHE_STRATEGY];
+        });
+    };
 
     // during this we broadcast something, and may cache it, then move to the next item in the broadcast dist, this will depend on PIX vs LIX setting
     var currentTime = 0;
     function broadcast(page) {
-        broadcasts++;
+        currentTime++;
 
         if(UPDATE_PIX) {
             page.X++;
@@ -316,26 +397,35 @@ $(document).ready(function() {
 
         currentCache = diskCaches[USE_PIX ? 0 : page.disk.id];
 
-        var last = currentCache.last();
-        if(!last || (last.PIX < page.PIX && currentCache.indexOf(page) < 0)) {
-            currentCache.pop();
-            currentCache.push(page);
+        if(USE_PIX) {
+            var last = currentCache.last();
+            if(!last || (last.PIX < page.PIX && currentCache.indexOf(page) < 0)) {
+                currentCache.pop();
+                currentCache.push(page);
 
-            currentCache.sort(function(a, b) {
-                if(!b && !a) {
-                    return 0;
-                }
+                sortCurrentCache();
+            }
+        }
+        else { // use lix
+            // re-calculate p
+            page.p = (CONST_C / (currentTime - page.t)) + (1 - CONST_C) * page.p;
+            page.t = currentTime;
+            page.LIX = page.p / page.disk.f;
 
-                if(!b) {
-                    return -1;
-                }
+            // now move that page to the top of the cache
+            currentCache.removeElement(page);
 
-                if(!a) {
-                    return 1;
-                }
+            sortCurrentCache();
 
-                return b.PIX - a.PIX;
-            });
+            if(currentCache.length === maxCacheLength) {
+                currentCache.pop(); // too long, need to remove the lowest LIX value
+            }
+
+            currentCache.unshift(page);
+
+
+
+            // now sort the remaining elements based on their LIX value
         }
 
         for(var i = 0; i < currentCache.length; i++) {
@@ -343,7 +433,7 @@ $(document).ready(function() {
             $(".cached-" + i, currentCache.$tr).html(c ? c.id : "-");
         }
 
-        $("#current-time").html(++currentTime);
+        $("#current-time").html(currentTime);
         updatePages();
     }
 

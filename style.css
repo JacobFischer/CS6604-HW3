@@ -65,3 +65,8 @@ ul#disks > li:first-child {
 ul#disks > li > * {
 	margin-top: 0.5em;
 }
+
+#done {
+	font-weight: bold;
+	font-size: 3em;
+}
