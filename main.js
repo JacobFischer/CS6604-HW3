@@ -2,6 +2,7 @@ var print = console.log;
 
 var USE_LIX = Boolean(getUrlParameter("lix"));
 var USE_PIX = !USE_LIX; // if they don't tell us to use LIX, we will default to PIX
+var UPDATE_PIX = Boolean(getUrlParameter("updatePIX"));
 
 function chunkify(a, n, out, balanced) {
     if (n < 2) {
@@ -43,6 +44,9 @@ function chunkify(a, n, out, balanced) {
 }
 
 $(document).ready(function() {
+    var CACHE_STRATEGY = USE_LIX ? "LIX" : "PIX";
+    $(".cache-strategy").html(CACHE_STRATEGY);
+
     // Broadcast Program Generation
 
     // Order the pages from hottest to coldest, we will call this the "main disk"
@@ -56,6 +60,7 @@ $(document).ready(function() {
             P: Math.random(),   // Probability of Access
             X: 0,               // Frequency of Broadcast
             PIX: NaN,
+            LIX: NaN,
         };
 
         randomSum += pages[i].P;
@@ -80,7 +85,7 @@ $(document).ready(function() {
             .append($("<td>").addClass("id"))
             .append($("<td>").addClass("P"))
             .append($("<td>").addClass("X"))
-            .append($("<td>").addClass("PIX"));
+            .append($("<td>").addClass(CACHE_STRATEGY));
 
         $pages.append($row);
     }
@@ -230,6 +235,16 @@ $(document).ready(function() {
         }
     }
 
+    // our broadcast disk is now complete, so let's back fill X for all pages
+    if(!UPDATE_PIX) {
+        for(var i = 0; i < broadcastDisk.length; i++) {
+            var page = broadcastDisk[i];
+            page.X += 1/broadcastDisk.length;
+            page.PIX = page.P / page.X;
+        }
+        updatePages();
+    }
+
     // PIX/LIX //
 
     var $clientRequests = $("#client-requests");
@@ -267,8 +282,10 @@ $(document).ready(function() {
     function broadcast(page) {
         broadcasts++;
 
-        page.X++;
-        page.PIX = page.P / page.X;
+        if(UPDATE_PIX) {
+            page.X++;
+            page.PIX = page.P / page.X;
+        }
 
         var last = cached.last();
         if(!last || (last.PIX < page.PIX && cached.indexOf(page) < 0)) {
