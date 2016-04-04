@@ -43,3 +43,25 @@ table td {
 .DISK_5 {
 	background-color: LightCyan;
 }
+
+ul#disks {
+	list-style-type: none;
+}
+
+ul#disks li header {
+	font-weight: bold;
+	padding: 0.5em;
+	font-size: 1.5em;
+}
+
+ul#disks li {
+	padding-top: 2em;
+}
+
+ul#disks > li:first-child {
+	padding-top: 0;
+}
+
+ul#disks > li > * {
+	margin-top: 0.5em;
+}

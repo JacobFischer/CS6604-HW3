@@ -182,13 +182,18 @@ $(document).ready(function() {
         }
 
         $disks.append(
-            $("<li>").append(
-                $('<table class="disk">').append(
-                    $tr
+            $("<li>")
+                .append($("<header>")
+                    .addClass(disk.id)
+                    .html("Disk " + i)
                 )
-            ).append(
-               $chunky
-            )
+                .append(
+                    $('<table class="disk">').append(
+                        $tr
+                    )
+                ).append(
+                   $chunky
+                )
         );
     }
 
@@ -266,19 +271,41 @@ $(document).ready(function() {
             .appendTo($clientRequests);
     }
 
-    var cached = [];
-    cached.length = getUrlParameter("caches", 1);
-
     var $cached = $("#cached");
-    for(var i = 0; i < cached.length; i++) {
-        $cached.append($("<td>")
-            .attr("id", "cached-" + i)
-        );
+
+    var diskCaches = [];
+    var diskCachesNum = USE_PIX ? 1 : disks.length;
+    var currentCache = undefined; // will be a cache in diskCaches
+    for(var i = 0; i < diskCachesNum; i++) {
+        var cache = [];
+        cache.length = getUrlParameter("caches", 1);
+        var index = 0;
+        if(USE_LIX) {
+            index = disks[i].id;
+        }
+
+        diskCaches[i] = cache;
+        currentCache = currentCache || cache;
+
+        cache.$tr = $("<tr>")
+            .attr("id", "disk-cache-" + i)
+            .appendTo($cached);
+
+        if(USE_LIX) {
+            cache.$tr.append($("<td>Disk " + i + "</td>"));
+        }
+
+        for(var j = 0; j < cache.length; j++) {
+            $("<td>")
+                .appendTo(cache.$tr)
+                .addClass("cached-" + j);
+        }
     }
 
     var broadcasts = 0;
 
     // during this we broadcast something, and may cache it, then move to the next item in the broadcast dist, this will depend on PIX vs LIX setting
+    var currentTime = 0;
     function broadcast(page) {
         broadcasts++;
 
@@ -287,12 +314,14 @@ $(document).ready(function() {
             page.PIX = page.P / page.X;
         }
 
-        var last = cached.last();
-        if(!last || (last.PIX < page.PIX && cached.indexOf(page) < 0)) {
-            cached.pop();
-            cached.push(page);
+        currentCache = diskCaches[USE_PIX ? 0 : page.disk.id];
 
-            cached.sort(function(a, b) {
+        var last = currentCache.last();
+        if(!last || (last.PIX < page.PIX && currentCache.indexOf(page) < 0)) {
+            currentCache.pop();
+            currentCache.push(page);
+
+            currentCache.sort(function(a, b) {
                 if(!b && !a) {
                     return 0;
                 }
@@ -309,11 +338,12 @@ $(document).ready(function() {
             });
         }
 
-        for(var i = 0; i < cached.length; i++) {
-            var c = cached[i];
-            $("#cached-" + i).html(c ? c.id : "-");
+        for(var i = 0; i < currentCache.length; i++) {
+            var c = currentCache[i];
+            $(".cached-" + i, currentCache.$tr).html(c ? c.id : "-");
         }
 
+        $("#current-time").html(++currentTime);
         updatePages();
     }
 
@@ -333,7 +363,7 @@ $(document).ready(function() {
 
         broadcast(broadcasting);
 
-        while(clientRequest && (clientRequest.page === broadcasting ||  cached.indexOf(clientRequest.page) > -1)) {
+        while(clientRequest && (clientRequest.page === broadcasting ||  currentCache.indexOf(clientRequest.page) > -1)) {
             clientRequest.fullfilled = true;
             clientRequest = clientRequests[++clientIndex];
         }
